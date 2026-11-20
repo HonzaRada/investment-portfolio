@@ -49,3 +49,10 @@ export type StatementPreview = {
   cash: CashBalance[];
   issues: string[];
 };
+
+export type SavedStatement = { id: string; filename: string; savedAt: string };
+
+export type StatementHistory = {
+  statements: SavedStatement[];
+  next?: { id: string; savedAt: string };
+};

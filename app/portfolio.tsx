@@ -2,12 +2,24 @@
 
 import { createTRPCClient, httpLink } from "@trpc/client";
 import { Activity, ArrowDownUp, BriefcaseBusiness, CircleCheck, FileText, LayoutGrid, Upload, Wallet } from "lucide-react";
-import { useRef, useState, type ChangeEvent } from "react";
+import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import type { AppRouter } from "@/server/router";
-import { maxStatementBytes, type Activity as StatementActivity, type Source, type StatementPreview } from "@/lib/import-types";
+import {
+  maxStatementBytes,
+  type Activity as StatementActivity,
+  type SavedStatement,
+  type Source,
+  type StatementHistory,
+  type StatementPreview,
+} from "@/lib/import-types";
 
 const api = createTRPCClient<AppRouter>({ links: [httpLink({ url: "/api/trpc" })] });
 const dateFormat = new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium", timeZone: "UTC" });
+const savedDateFormat = new Intl.DateTimeFormat("cs-CZ", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Europe/Prague",
+});
 const activityLabels: Record<StatementActivity["kind"], string> = {
   BUY: "Nákup",
   SELL: "Prodej",
@@ -41,41 +53,104 @@ function Money({ value, currency }: { value: string; currency: string }) {
   return <span className="money">{displayDecimal(value, 2)} <small>{currency}</small></span>;
 }
 
-export function Portfolio({ initialPreview }: { initialPreview: StatementPreview }) {
+type StatementView =
+  | { kind: "demo"; preview: StatementPreview }
+  | { kind: "upload"; preview: StatementPreview; xml: string; filename: string }
+  | { kind: "saved"; preview: StatementPreview; statement: SavedStatement };
+
+export function Portfolio({ initialPreview, initialHistory, accountControls }: {
+  initialPreview: StatementPreview;
+  initialHistory: StatementHistory | null;
+  accountControls: ReactNode;
+}) {
   const fileInput = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState(initialPreview);
-  const [filename, setFilename] = useState("ibkr-demo.xml");
-  const [isDemo, setIsDemo] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<StatementView>({ kind: "demo", preview: initialPreview });
+  const [history, setHistory] = useState(initialHistory);
+  const [pending, setPending] = useState<"upload" | "save" | "open" | "history" | null>(null);
   const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
   const [account, setAccount] = useState(initialPreview.accounts[0].id);
+  const { preview } = view;
   const selected = preview.accounts.find(({ id }) => id === account) ?? preview.accounts[0];
   const positions = preview.positions.filter((row) => row.account === selected.id);
   const cash = preview.cash.filter((row) => row.account === selected.id);
   const activities = preview.activities.filter((row) => row.account === selected.id).sort((a, b) => b.date.localeCompare(a.date));
   const matching = cash.filter(({ difference }) => difference === "0").length;
 
-  async function loadFile(event: ChangeEvent<HTMLInputElement>) {
+  function show(next: StatementView) {
+    setAccount(next.preview.accounts[0].id);
+    setView(next);
+  }
+
+  async function run(operation: NonNullable<typeof pending>, action: () => Promise<void>) {
+    setError("");
+    setStatus("");
+    setPending(operation);
+    try {
+      await action();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "S výpisem se nepodařilo pracovat.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  function loadFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
     if (!file) return;
-    setError("");
     if (file.size > maxStatementBytes) {
+      setStatus("");
       setError("Vyber XML soubor do 2 MB.");
       return;
     }
-    setLoading(true);
-    try {
-      const result = await api.previewStatement.mutate({ xml: await file.text() });
-      setPreview(result);
-      setAccount(result.accounts[0].id);
-      setFilename(file.name);
-      setIsDemo(false);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Výpis se nepodařilo načíst.");
-    } finally {
-      setLoading(false);
-    }
+    void run("upload", async () => {
+      const buffer = await file.arrayBuffer();
+      let xml: string;
+      try {
+        xml = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(buffer);
+      } catch {
+        throw new Error("Výpis musí být XML v kódování UTF-8.");
+      }
+      const result = await api.previewStatement.mutate({ xml });
+      show({ kind: "upload", preview: result, xml, filename: file.name });
+    });
+  }
+
+  function save() {
+    if (view.kind !== "upload") return;
+    const { filename, xml, preview } = view;
+    void run("save", async () => {
+      const saved = await api.saveStatement.mutate({ filename, xml });
+      setView({ kind: "saved", statement: saved.statement, preview });
+      if (saved.created) {
+        setHistory((current) => current ? {
+          ...current,
+          statements: [saved.statement, ...current.statements.filter(({ id }) => id !== saved.statement.id)],
+        } : current);
+      }
+      setStatus(saved.created ? "Výpis byl uložen do historie." : "Tento výpis už máš uložený.");
+    });
+  }
+
+  function open(id: string) {
+    void run("open", async () => {
+      const result = await api.getStatement.query({ id });
+      show({ kind: "saved", ...result });
+      setStatus(`Otevřen výpis ${result.statement.filename}.`);
+    });
+  }
+
+  function more() {
+    if (!history?.next) return;
+    const olderThan = history.next;
+    void run("history", async () => {
+      const page = await api.listStatements.query({ olderThan });
+      setHistory((current) => current ? {
+        next: page.next,
+        statements: [...current.statements, ...page.statements],
+      } : current);
+    });
   }
 
   return (
@@ -87,6 +162,7 @@ export function Portfolio({ initialPreview }: { initialPreview: StatementPreview
         </a>
         <nav aria-label="Navigace">
           <a href="#prehled"><LayoutGrid size={17} aria-hidden="true" /> Přehled</a>
+          {history && <a href="#historie"><FileText size={17} aria-hidden="true" /> Historie výpisů</a>}
           <a href="#pozice"><BriefcaseBusiness size={17} aria-hidden="true" /> Pozice</a>
           <a href="#hotovost"><Wallet size={17} aria-hidden="true" /> Hotovost</a>
           <a href="#transakce"><ArrowDownUp size={17} aria-hidden="true" /> Transakce</a>
@@ -96,7 +172,7 @@ export function Portfolio({ initialPreview }: { initialPreview: StatementPreview
       <main id="prehled">
         <header className="topbar">
           <span>Přehled</span>
-          <span className="environment"><span /> Lokální prototyp</span>
+          {accountControls}
         </header>
         <div className="content">
           <section className="heading">
@@ -106,25 +182,52 @@ export function Portfolio({ initialPreview }: { initialPreview: StatementPreview
             </div>
             <div className="import-actions">
               <input ref={fileInput} type="file" accept=".xml,application/xml,text/xml" onChange={loadFile} hidden />
-              <button type="button" disabled={loading} onClick={() => fileInput.current?.click()}>
+              <button type="button" disabled={Boolean(pending)} onClick={() => fileInput.current?.click()}>
                 <Upload size={17} aria-hidden="true" />
-                {loading ? "Načítám výpis…" : "Nahrát výpis"}
+                {pending === "upload" ? "Načítám výpis…" : "Nahrát výpis"}
               </button>
             </div>
           </section>
           {error && <div className="alert" role="alert">{error}</div>}
+          {status && <p className="notice" role="status">{status}</p>}
+
+          {history && (
+            <section className="panel import-history" id="historie" aria-labelledby="history-title">
+              <header><h2 id="history-title">Uložené výpisy</h2></header>
+              {history.statements.length ? (
+                <ul>
+                  {history.statements.map((statement) => (
+                    <li key={statement.id}>
+                      <button type="button" className="text-button" disabled={Boolean(pending)}
+                        aria-current={view.kind === "saved" && view.statement.id === statement.id ? "true" : undefined}
+                        onClick={() => open(statement.id)}>{statement.filename}</button>
+                      <time dateTime={statement.savedAt}>{savedDateFormat.format(new Date(statement.savedAt))}</time>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="empty">Tady najdeš výpisy, které uložíš po nahrání.</p>}
+              {history.next && <button type="button" className="text-button import-history-more" disabled={Boolean(pending)}
+                onClick={more}>{pending === "history" ? "Načítám…" : "Načíst starší výpisy"}</button>}
+            </section>
+          )}
 
           <section className="statement" aria-label="Načtený výpis" aria-live="polite">
             <span className="file-icon"><FileText size={21} aria-hidden="true" /></span>
             <div className="statement-file">
-              <strong>{isDemo ? "Ukázkový výpis" : filename}</strong>
+              <strong>{view.kind === "demo" ? "Ukázkový výpis" : view.kind === "saved" ? view.statement.filename : view.filename}</strong>
               <span>{displayDate(selected.from)} – {displayDate(selected.to)}</span>
+              {view.kind === "upload" && !history && <span className="temporary">Dočasný náhled</span>}
             </div>
             {preview.accounts.length > 1
               ? <label className="account">Účet <select value={account} onChange={(event) => setAccount(event.target.value)}>
                 {preview.accounts.map(({ id }) => <option key={id} value={id}>{id}</option>)}
               </select></label>
               : <span className="account">Účet <strong>{selected.id}</strong></span>}
+            {view.kind === "upload" && history && (
+              <button className="save-button" type="button" disabled={Boolean(pending)} onClick={save}>
+                {pending === "save" ? "Ukládám…" : "Uložit výpis"}
+              </button>
+            )}
           </section>
 
           {preview.issues.length > 0 && (
@@ -191,13 +294,12 @@ export function Portfolio({ initialPreview }: { initialPreview: StatementPreview
             )}
           </section>
           <footer><a href="/ibkr-demo.xml" download>Stáhnout ukázkové XML</a>
-            {!isDemo && <button className="text-button" onClick={() => {
-              setPreview(initialPreview);
-              setFilename("ibkr-demo.xml");
-              setAccount(initialPreview.accounts[0].id);
-              setIsDemo(true);
+            {view.kind === "saved" && <a href={`/api/statements/${view.statement.id}/xml`}>Stáhnout původní XML</a>}
+            {view.kind !== "demo" && <button type="button" className="text-button" onClick={() => {
+              show({ kind: "demo", preview: initialPreview });
               setError("");
-            }} disabled={loading}>Zobrazit ukázku</button>}
+              setStatus("");
+            }} disabled={Boolean(pending)}>Zobrazit ukázku</button>}
           </footer>
         </div>
       </main>
