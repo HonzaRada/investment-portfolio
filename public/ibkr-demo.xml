@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="Ukázkové portfolio" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="DEMO-001" fromDate="20250101" toDate="20251231">
+      <Trades>
+        <Trade levelOfDetail="EXECUTION" assetCategory="STK" tradeID="10001" conid="501" symbol="AAPL" tradeDate="20250115" buySell="BUY" quantity="10" currency="USD" proceeds="-2300" ibCommission="-1" ibCommissionCurrency="USD" netCash="-2301"/>
+        <Trade levelOfDetail="EXECUTION" assetCategory="STK" tradeID="10002" conid="502" symbol="MSFT" tradeDate="20250312" buySell="BUY" quantity="5" currency="USD" proceeds="-1900" ibCommission="-1" ibCommissionCurrency="USD" netCash="-1901"/>
+        <Trade levelOfDetail="EXECUTION" assetCategory="STK" tradeID="10003" conid="503" symbol="VWCE" tradeDate="20250402" buySell="BUY" quantity="12" currency="EUR" proceeds="-1440" ibCommission="-1.25" ibCommissionCurrency="EUR" netCash="-1441.25"/>
+        <Trade levelOfDetail="EXECUTION" assetCategory="STK" tradeID="10004" conid="501" symbol="AAPL" tradeDate="20251020" buySell="SELL" quantity="-2" currency="USD" proceeds="500" ibCommission="-1" ibCommissionCurrency="USD" netCash="499"/>
+      </Trades>
+      <CashTransactions>
+        <CashTransaction levelOfDetail="DETAIL" transactionID="20001" dateTime="20250110;090000" type="Deposits/Withdrawals" currency="USD" amount="6500"/>
+        <CashTransaction levelOfDetail="DETAIL" transactionID="20002" dateTime="20250401;090000" type="Deposits/Withdrawals" currency="EUR" amount="2000"/>
+        <CashTransaction levelOfDetail="DETAIL" transactionID="20003" dateTime="20251113" type="Dividends" symbol="AAPL" currency="USD" amount="2.08"/>
+        <CashTransaction levelOfDetail="DETAIL" transactionID="20004" dateTime="20251113" type="Withholding Tax" symbol="AAPL" currency="USD" amount="-0.31"/>
+      </CashTransactions>
+      <OpenPositions>
+        <OpenPosition levelOfDetail="SUMMARY" assetCategory="STK" conid="501" symbol="AAPL" currency="USD" position="8" positionValue="2080"/>
+        <OpenPosition levelOfDetail="SUMMARY" assetCategory="STK" conid="502" symbol="MSFT" currency="USD" position="5" positionValue="2425"/>
+        <OpenPosition levelOfDetail="SUMMARY" assetCategory="STK" conid="503" symbol="VWCE" currency="EUR" position="12" positionValue="1596"/>
+      </OpenPositions>
+      <CashReport>
+        <CashReportCurrency currency="BASE_SUMMARY" startingCash="0" endingCash="0"/>
+        <CashReportCurrency currency="USD" startingCash="0" endingCash="2798.77"/>
+        <CashReportCurrency currency="EUR" startingCash="0" endingCash="558.75"/>
+      </CashReport>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>
