@@ -29,6 +29,14 @@ Hodnota pozic je převzatá z výpisu. Hotovost se porovnává po měnách jako 
 
 Opakované uložení stejného XML otevře stávající výpis. Překrývající se výpisy mají vlastní náhled a sdílí jednu evidenční položku pro každý účet a stabilní identifikátor transakce. Pokud stejný identifikátor přijde s odlišnými údaji, uložení skončí hlášením o konfliktu a žádná část importu se nezapíše. Řádky bez stabilního ID jsou dohledatelné v uloženém výpisu.
 
+## Daňové podklady
+
+V přehledu otevři **Daňové podklady**, vyber rok a stáhni CSV. Bez přihlášení je dostupná ukázka. Přihlášený uživatel vidí vlastní uložené transakce.
+
+Přehled zahrnuje prodeje akcií a ETF, dividendy, náhrady dividend, srážky a úroky z výpisu. Přepočet používá [denní kurzy ČNB](https://www.cnb.cz/cs/casto-kladene-dotazy/Kurzy-devizoveho-trhu-na-www-strankach-CNB/) k datu uvedenému ve výpisu a CSV uvádí datum zveřejnění, kurz i počet jednotek měny. Výběr roku se řídí datem transakce z výpisu. Při kontrole přelomu roku je potřeba ověřit datum vypořádání nebo připsání.
+
+Párování FIFO je návrh z evidovaných nákupů podle účtu a instrumentu, včetně dostupných starších výpisů. Chybějící nákup, zjištěná mezera v historii či nedoložené pořadí obchodů v jednom dni vyžadují kontrolu. Přiřazené nákupy v CSV jsou podrobnosti k prodejům. K výpočtu osvobození, samotné daně a zápočtu zahraničních srážek je potřeba samostatné posouzení.
+
 ## Kontroly
 
 ```sh
@@ -41,4 +49,4 @@ Integrační test `npm run test:storage` používá běžící aplikaci a samost
 
 ## Rozsah
 
-Next.js, TypeScript, tRPC, Auth.js a PostgreSQL s Drizzle. Import je zatím ověřený na syntetických výpisech IBKR. Roční podklady pro české daňové rezidenty a import rozšířených událostí pro opce a krypto jsou plánované.
+Next.js, TypeScript, tRPC, Auth.js a PostgreSQL s Drizzle. Import i daňové podklady jsou zatím ověřené na syntetických výpisech IBKR. Import rozšířených událostí pro opce a krypto je plánovaný.

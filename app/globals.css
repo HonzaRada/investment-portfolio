@@ -167,6 +167,34 @@ tbody th { font-weight: 680; }
 .import-history-more { margin: .65rem 1.05rem; }
 footer { display: flex; flex-wrap: wrap; gap: 1rem; padding: 1rem 0; color: var(--accent); font-size: .875rem; }
 .text-button { color: inherit; background: none; border: none; padding: 0; text-decoration: underline; cursor: pointer; }
+.tax-page { min-height: 100vh; }
+.tax-nav { margin-bottom: 1rem; color: var(--accent); }
+.tax-filters { display: flex; gap: .6rem; align-items: center; margin-bottom: 1rem; }
+.tax-table { min-width: 52rem; }
+.tax-table td, .tax-table th { vertical-align: top; }
+.report-download {
+  display: inline-block;
+  color: #fff;
+  background: var(--accent);
+  border-radius: .5rem;
+  padding: .6rem .95rem;
+  text-decoration: none;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.report-download:hover { background: #0d5144; }
+.report-amount, .report-source, .report-subline { display: block; }
+.report-amount small, .report-source small, .report-subline { color: var(--muted); }
+.report-amount > small, .report-source small { display: block; }
+.report-source a { color: var(--accent); overflow-wrap: anywhere; }
+.report-amount strong { white-space: nowrap; }
+.report-subline { margin-top: .25rem; }
+.report-review { color: #654815; }
+.tax-lots summary { color: var(--accent); cursor: pointer; }
+.tax-lots ul { margin: .5rem 0 0; padding-left: 1rem; }
+.tax-lots li + li { margin-top: .4rem; }
+.tax-footnote { color: var(--muted); }
+.tax-alert { margin-top: 1rem; }
 
 @media (max-width: 68rem) {
   .shell { grid-template-columns: 11.25rem minmax(0, 1fr); }

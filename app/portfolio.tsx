@@ -2,6 +2,7 @@
 
 import { createTRPCClient, httpLink } from "@trpc/client";
 import { Activity, ArrowDownUp, BriefcaseBusiness, CircleCheck, FileText, LayoutGrid, Upload, Wallet } from "lucide-react";
+import Link from "next/link";
 import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import type { AppRouter } from "@/server/router";
 import {
@@ -166,6 +167,7 @@ export function Portfolio({ initialPreview, initialHistory, accountControls }: {
           <a href="#pozice"><BriefcaseBusiness size={17} aria-hidden="true" /> Pozice</a>
           <a href="#hotovost"><Wallet size={17} aria-hidden="true" /> Hotovost</a>
           <a href="#transakce"><ArrowDownUp size={17} aria-hidden="true" /> Transakce</a>
+          <Link href="/dane" prefetch={false}><FileText size={17} aria-hidden="true" /> Daňové podklady</Link>
         </nav>
       </aside>
 

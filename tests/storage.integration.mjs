@@ -94,6 +94,20 @@ test("private statement history preserves original XML, deduplicates events and 
     assert.equal((await get(`/api/statements/${id}/xml`)).status, 401);
     assert.deepEqual((await responseData(await trpcQuery("listStatements", {}, other))).statements, []);
 
+    const ownReport = await get("/api/tax-report?year=2025", owner);
+    assert.equal(ownReport.status, 200);
+    assert.equal(ownReport.headers.get("cache-control"), "private, no-store");
+    const ownCsv = await ownReport.text();
+    assert.ok(ownCsv.includes(id));
+    assert.match(ownCsv, /Nákup přiřazený FIFO/);
+    const separateReport = await get("/api/tax-report?year=2025", other);
+    assert.equal(separateReport.status, 200);
+    assert.ok(!(await separateReport.text()).includes(id));
+    const demoReport = await get("/api/tax-report?year=2025");
+    const demoCsv = await demoReport.text();
+    assert.equal(demoReport.status, 200);
+    assert.ok(demoCsv.includes("ibkr-demo.xml") && !demoCsv.includes(id));
+
     const overlapping = demo.replace("</CashTransactions>", '<CashTransaction levelOfDetail="DETAIL" transactionID="20005" dateTime="20251202" type="Dividends" symbol="AAPL" currency="USD" amount="1"/>\n</CashTransactions>')
       .replace('endingCash="2798.77"', 'endingCash="2799.77"');
     assert.equal((await responseData(await save("overlapping.xml", overlapping, owner))).created, true);
