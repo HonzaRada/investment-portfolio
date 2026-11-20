@@ -1,6 +1,10 @@
 import Decimal from "decimal.js";
 import type { CnbRate } from "./cnb-rates.ts";
 import type { Activity } from "./import-types.ts";
+import {
+  checkHoldingPeriod, holdingCheckLabel, securitiesCapNote, securitiesRules, securitiesValueLabel, summarizeSecuritiesSales,
+  type HoldingCheck,
+} from "./securities-exemption.ts";
 
 export type TaxActivity = Activity & { importId?: string; filename: string };
 export type TaxCoverage = {
@@ -11,7 +15,7 @@ export type TaxCoverage = {
 };
 
 type TaxAmount = { amount: string; currency: string; czk?: string; rate?: CnbRate };
-type TaxLot = { purchase: TaxActivity; quantity: string; gross: TaxAmount; commission?: TaxAmount };
+type TaxLot = { purchase: TaxActivity; quantity: string; gross: TaxAmount; commission?: TaxAmount; holdingCheck?: HoldingCheck };
 
 export type TaxRow = {
   activity: TaxActivity;
@@ -103,6 +107,7 @@ function instrumentKey(event: TaxActivity) {
 }
 
 export function buildTaxReport(year: string, events: TaxActivity[], statements: TaxCoverage[], rateAt: RateLookup) {
+  const rules = securitiesRules(year);
   const { firstProblem, alerts } = coverageProblems(statements, year);
   const rows: TaxRow[] = [];
   const holdings = new Map<string, Holding>();
@@ -130,11 +135,16 @@ export function buildTaxReport(year: string, events: TaxActivity[], statements: 
       activity,
       gross: amountInCzk(new Money(amount), currency, date, rateAt),
       commission: commission ? amountInCzk(new Money(commission.amount), commission.currency, date, rateAt) : undefined,
-      ...matched,
+      note: matched.note,
+      lots: rules && matched.lots
+        ? matched.lots.map((lot) => ({ ...lot, holdingCheck: checkHoldingPeriod(lot.purchase.date, date, rules.timeTestYears) }))
+        : matched.lots,
     });
   }
 
-  return { year, rows, alerts: [...new Set(alerts)] };
+  const sales = rows.filter(({ activity }) => activity.kind === "SELL");
+  const securities = rules ? summarizeSecuritiesSales(rules, sales.map(({ gross }) => gross)) : null;
+  return { year, rows, alerts: [...new Set(alerts)], securities };
 }
 
 function matchTrade(
@@ -207,16 +217,34 @@ export function taxCsv(report: ReturnType<typeof buildTaxReport>) {
     "Rok přehledu", "Typ", "Datum z výpisu", "Účet", "Instrument", "Množství", "Částka", "Měna",
     "Datum kurzu ČNB", "Kurz v Kč", "Jednotek měny", "Částka Kč", "Komise", "Měna komise", "Datum kurzu pro komisi",
     "Kurz komise v Kč", "Jednotek měny komise", "Komise Kč", "Zdrojový výpis", "ID uloženého výpisu", "Sekce XML",
-    "Řádek XML", "ID transakce", "Navázaný prodej", "ID výpisu prodeje", "Poznámka",
+    "Řádek XML", "ID transakce", "Navázaný prodej", "ID výpisu prodeje", "Datum výročí držby",
+    "Držba podle výpisu", "Poznámka",
   ];
   const lines = [header.map(csvText).join(";")];
-  for (const alert of report.alerts) {
-    lines.push(header.map((_, index) => index === 0 ? report.year : index === 1 ? csvText("Kontrola importu") :
-      index === header.length - 1 ? csvText(alert) : "").join(";"));
+  function summaryLine(label: string, note: string, total?: string) {
+    const cells = Array<string>(header.length).fill("");
+    cells[0] = report.year;
+    cells[1] = csvText(label);
+    cells[header.indexOf("Částka Kč")] = csvNumber(total);
+    cells[header.length - 1] = csvText(note);
+    lines.push(cells.join(";"));
   }
 
-  function line(activity: TaxActivity, type: string, gross: TaxAmount, commission?: TaxAmount,
-    quantity?: string, note?: string, sale?: TaxActivity) {
+  if (report.securities) {
+    const { counted, missing, grossCzk, grossThresholdCzk, comparison, timeTestCapCzk } = report.securities;
+    const limit = new Intl.NumberFormat("cs-CZ").format(BigInt(grossThresholdCzk));
+    summaryLine("Hodnotový test · evidovaný součet",
+      `${securitiesValueLabel(comparison)} Roční hranice činí ${limit} Kč. Přepočteno ${counted} z ${counted + missing} evidovaných prodejů. Pro posouzení je třeba zahrnout všechny odpovídající příjmy poplatníka a ověřit rozhodná data.`,
+      grossCzk ?? undefined);
+    summaryLine("Časový test · pravidla pro rok " + report.year, securitiesCapNote(report.year, timeTestCapCzk));
+  }
+  for (const alert of report.alerts) {
+    summaryLine("Kontrola importu", alert);
+  }
+
+  function line(activity: TaxActivity, type: string, gross: TaxAmount, commission: TaxAmount | undefined, {
+    quantity, note, sale, holding,
+  }: { quantity?: string; note?: string; sale?: TaxActivity; holding?: HoldingCheck }) {
     const notes = [note, !gross.rate || (commission && !commission.rate) ? "Chybí denní kurz ČNB." : undefined];
     return [
       report.year, csvText(type), csvText(activity.date), csvText(activity.account), csvText(activity.symbol), csvNumber(quantity),
@@ -224,15 +252,19 @@ export function taxCsv(report: ReturnType<typeof buildTaxReport>) {
       csvNumber(gross.rate?.units), csvNumber(gross.czk), csvNumber(commission?.amount), csvText(commission?.currency),
       csvText(commission?.rate?.date), csvNumber(commission?.rate?.amount), csvNumber(commission?.rate?.units), csvNumber(commission?.czk),
       csvText(activity.filename), csvText(activity.importId), csvText(activity.source.section), String(activity.source.line),
-      csvText(activity.source.id), csvText(sale?.source.id), csvText(sale?.importId), csvText(notes.filter(Boolean).join(" ")),
+      csvText(activity.source.id), csvText(sale?.source.id), csvText(sale?.importId),
+      csvText(holding && holding.status !== "historic" ? holding.anniversary : undefined),
+      csvText(holding ? holdingCheckLabel(holding) : undefined), csvText(notes.filter(Boolean).join(" ")),
     ].join(";");
   }
 
   for (const row of report.rows) {
     const { activity, gross, commission, note, lots } = row;
-    lines.push(line(activity, taxLabels[activity.kind] ?? activity.kind, gross, commission, activity.quantity, note));
+    lines.push(line(activity, taxLabels[activity.kind] ?? activity.kind, gross, commission, { quantity: activity.quantity, note }));
     for (const lot of lots ?? []) {
-      lines.push(line(lot.purchase, "Nákup přiřazený FIFO", lot.gross, lot.commission, lot.quantity, undefined, activity));
+      lines.push(line(lot.purchase, "Nákup přiřazený FIFO", lot.gross, lot.commission, {
+        quantity: lot.quantity, sale: activity, holding: lot.holdingCheck,
+      }));
     }
   }
   return "\uFEFF" + lines.join("\r\n") + "\r\n";

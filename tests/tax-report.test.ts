@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { cnbRateAt, parseCnbArchive } from "../lib/cnb-rates.ts";
+import { checkHoldingPeriod, securitiesRules } from "../lib/securities-exemption.ts";
 import { buildTaxReport, taxCsv, type RateLookup, type TaxActivity, type TaxCoverage } from "../lib/tax-report.ts";
 
 function trade(kind: "BUY" | "SELL", date: string, quantity: string, amount: string, id: string): TaxActivity {
@@ -61,5 +62,45 @@ test("CSV keeps source identifiers, does not zero missing amounts, and escapes f
   const csv = taxCsv(buildTaxReport("2025", [dividend], [], () => undefined));
   assert.ok(csv.startsWith("\uFEFF"));
   assert.match(csv, /"' =1\+2";-1;20,5;"USD";/);
-  assert.match(csv, /"d1";;;"Chybí denní kurz ČNB\."/);
+  assert.match(csv, /"d1";;;;;"Chybí denní kurz ČNB\."/);
+});
+
+test("the holding check uses the anniversary and preserves the 2025 and 2026 rule differences", () => {
+  assert.deepEqual(checkHoldingPeriod("2020-02-29", "2023-02-27", 3),
+    { status: "shorter", anniversary: "2023-02-28", years: 3 });
+  assert.equal(checkHoldingPeriod("2020-02-29", "2023-02-28", 3).status, "anniversary");
+  assert.equal(checkHoldingPeriod("2020-02-29", "2023-03-01", 3).status, "longer");
+  assert.equal(checkHoldingPeriod("2013-12-31", "2025-03-01", 3).status, "historic");
+  assert.equal(securitiesRules("2025")?.timeTestCapCzk, "40000000");
+  assert.equal(securitiesRules("2026")?.timeTestCapCzk, null);
+  assert.equal(securitiesRules("2024"), null);
+});
+
+test("gross proceeds use all tracked sales and compare before rounding, omitting unknown amounts", () => {
+  const sale = { ...trade("SELL", "2025-06-01", "-1", "100000", "s1"), currency: "CZK",
+    commission: { amount: "-200", currency: "CZK" } };
+  const missing = { ...sale, currency: "USD", source: { ...sale.source, id: "s2" } };
+  const dividend = { ...sale, kind: "DIVIDEND", amount: "500" } as const;
+  const czkOnly: RateLookup = (date, currency) => currency === "CZK" ? { date, amount: "1", units: "1" } : undefined;
+  const exact = buildTaxReport("2025", [sale, dividend], [], czkOnly);
+  assert.equal(exact.securities?.grossCzk, "100000.00");
+  assert.equal(exact.securities?.comparison, "at");
+  const incomplete = buildTaxReport("2025", [sale, missing], [], czkOnly);
+  assert.equal(incomplete.securities?.comparison, "unknown");
+  assert.equal(incomplete.securities?.missing, 1);
+  const above = buildTaxReport("2025", [{ ...sale, amount: "100000.0001" }, missing], [], czkOnly);
+  assert.equal(above.securities?.grossCzk, "100000.00");
+  assert.equal(above.securities?.comparison, "above");
+});
+
+test("CSV includes separate holding dates for long and short lots assigned to a single sale", () => {
+  const old = trade("BUY", "2020-04-10", "1", "-200", "b1");
+  const recent = trade("BUY", "2025-01-10", "1", "-300", "b2");
+  const sale = trade("SELL", "2025-05-01", "-2", "500", "s1");
+  const report = buildTaxReport("2025", [old, recent, sale], [], rateAt);
+  assert.deepEqual(report.rows[0].lots?.map((lot) => lot.holdingCheck?.status), ["longer", "shorter"]);
+  const csv = taxCsv(report);
+  assert.match(csv, /Hodnotový test · evidovaný součet/);
+  assert.match(csv, /"2023-04-10";"Držba přes 3 roky podle výpisu"/);
+  assert.match(csv, /"2028-01-10";"Držba kratší než 3 roky podle výpisu"/);
 });

@@ -35,7 +35,9 @@ V přehledu otevři **Daňové podklady**, vyber rok a stáhni CSV. Bez přihlá
 
 Přehled zahrnuje prodeje akcií a ETF, dividendy, náhrady dividend, srážky a úroky z výpisu. Přepočet používá [denní kurzy ČNB](https://www.cnb.cz/cs/casto-kladene-dotazy/Kurzy-devizoveho-trhu-na-www-strankach-CNB/) k datu uvedenému ve výpisu a CSV uvádí datum zveřejnění, kurz i počet jednotek měny. Výběr roku se řídí datem transakce z výpisu. Při kontrole přelomu roku je potřeba ověřit datum vypořádání nebo připsání.
 
-Párování FIFO je návrh z evidovaných nákupů podle účtu a instrumentu, včetně dostupných starších výpisů. Chybějící nákup, zjištěná mezera v historii či nedoložené pořadí obchodů v jednom dni vyžadují kontrolu. Přiřazené nákupy v CSV jsou podrobnosti k prodejům. K výpočtu osvobození, samotné daně a zápočtu zahraničních srážek je potřeba samostatné posouzení.
+Párování FIFO je návrh z evidovaných nákupů podle účtu a instrumentu, včetně dostupných starších výpisů. Chybějící nákup, zjištěná mezera v historii či nedoložené pořadí obchodů v jednom dni vyžadují kontrolu. Přiřazené nákupy v CSV jsou podrobnosti k prodejům.
+
+Přehled pro roky 2025 a 2026 porovnává evidované hrubé příjmy z prodejů s hodnotovým limitem 100 000 Kč a u spárovaných nákupů vypisuje délku držby vůči tříleté hranici. Aktuální součet vychází z uložených výpisů a jejich dat. Pro hodnotový test je třeba zahrnout i prodeje mimo aplikaci a ověřit rozhodná data. K posouzení osvobození za rok 2025 může být potřeba zkontrolovat také společný limit 40 milionů Kč. Pro prodej cenných papírů se tento limit od roku 2026 zrušil. Výpočet daně a zápočet zahraničních srážek jsou plánované. [Finanční správa k roku 2025](https://financnisprava.gov.cz/cs/dane/dane/dan-z-prijmu/dotazy-a-odpovedi/dan-z-prijmu-fyzickych-osob/aktualne-k-dani-z-prijmu-fyzickych-osob-2025) · [Změny pro rok 2026](https://financnisprava.gov.cz/cs/financni-sprava/media-a-verejnost/tiskove-zpravy-gfr/tiskove-zpravy-2026/danove-novinky-pro-rok-2026)
 
 ## Kontroly
 

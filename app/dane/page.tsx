@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { holdingCheckLabel, securitiesCapNote, securitiesValueLabel } from "@/lib/securities-exemption";
 import { taxLabels, taxYear, type TaxActivity, type TaxRow } from "@/lib/tax-report";
 import { getTaxReport } from "@/server/tax-report";
 
@@ -31,9 +32,11 @@ function StatementSource({ activity }: { activity: TaxActivity }) {
 export default async function TaxPage({ searchParams }: PageProps<"/dane">) {
   const { rok } = await searchParams;
   const { report, years, isDemo } = await getTaxReport(taxYear(typeof rok === "string" ? rok : null));
+  const { securities } = report;
   const flagged = report.rows.filter((row) => row.note || !row.gross.rate ||
     (row.commission && !row.commission.rate) ||
-    row.lots?.some((lot) => !lot.gross.rate || (lot.commission && !lot.commission.rate))).length;
+    row.lots?.some((lot) => lot.holdingCheck?.status === "historic" || !lot.gross.rate ||
+      (lot.commission && !lot.commission.rate))).length;
 
   return (
     <main className="tax-page">
@@ -61,6 +64,30 @@ export default async function TaxPage({ searchParams }: PageProps<"/dane">) {
           <article><span>Položky ke kontrole</span><strong>{flagged}</strong></article>
         </div>
 
+        {securities && (
+          <section className="panel securities-panel" aria-labelledby="securities-title">
+            <header><h2 id="securities-title">Osvobození prodeje cenných papírů</h2></header>
+            <div className="securities-body">
+              <article>
+                <h3>Hodnotový test</h3>
+                <dl>
+                  <div><dt>Hrubé příjmy z evidovaných prodejů</dt><dd>{securities.grossCzk === null ? "—" : `${number(securities.grossCzk)} Kč`}</dd></div>
+                  <div><dt>Roční hranice</dt><dd>{number(securities.grossThresholdCzk)} Kč</dd></div>
+                </dl>
+                <p>{securitiesValueLabel(securities.comparison)}</p>
+                {securities.missing > 0 && <p>{securities.missing} prodejů vyžaduje kontrolu částky nebo kurzu.</p>}
+                <p>Pro posouzení zahrň všechny odpovídající příjmy za rok a ověř rozhodná data.</p>
+              </article>
+              <article>
+                <h3>Časový test</h3>
+                <p>Zákonná doba držby musí přesáhnout {securities.timeTestYears} roky. U přiřazených nákupů uvidíš srovnání podle dat ve výpisu.</p>
+                <p>{securitiesCapNote(report.year, securities.timeTestCapCzk)}</p>
+              </article>
+            </div>
+            <p className="securities-source"><a href={securities.source}>Pravidla pro rok {report.year} na Finanční správě</a></p>
+          </section>
+        )}
+
         <section className="panel" aria-labelledby="tax-transactions-title">
           <header>
             <h2 id="tax-transactions-title">Položky za rok {report.year}</h2>
@@ -84,6 +111,12 @@ export default async function TaxPage({ searchParams }: PageProps<"/dane">) {
                       <ul>{row.lots.map((lot) => <li key={JSON.stringify([lot.purchase.importId, lot.purchase.source.id])}>
                         {lot.purchase.date} · {number(lot.quantity)} ks <ReportAmount value={lot.gross} />
                         {lot.commission && <small>Komise <ReportAmount value={lot.commission} /></small>}
+                        {lot.holdingCheck && (
+                          <small className="report-subline">
+                            {holdingCheckLabel(lot.holdingCheck)}
+                            {lot.holdingCheck.status !== "historic" && ` · výročí ${lot.holdingCheck.anniversary}`}
+                          </small>
+                        )}
                         <StatementSource activity={lot.purchase} />
                       </li>)}</ul>
                     </details>
@@ -100,7 +133,7 @@ export default async function TaxPage({ searchParams }: PageProps<"/dane">) {
           <ul>{report.alerts.map((alert) => <li key={alert}>{alert}</li>)}</ul>
         </section>}
         <footer className="tax-footnote">
-          Přehled vychází z dat ve výpisech. Osvobození, výpočet daně a zápočet zahraničních srážek vyžadují samostatné posouzení.
+          Přehled vychází z dat ve výpisech. K určení nároku na osvobození, výpočtu daně a zápočtu srážek je potřeba úplná evidence.
         </footer>
       </div>
     </main>

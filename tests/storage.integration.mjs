@@ -100,9 +100,12 @@ test("private statement history preserves original XML, deduplicates events and 
     const ownCsv = await ownReport.text();
     assert.ok(ownCsv.includes(id));
     assert.match(ownCsv, /Nákup přiřazený FIFO/);
+    assert.match(ownCsv, /Hodnotový test · evidovaný součet/);
+    assert.match(ownCsv, /"2028-01-15";"Držba kratší než 3 roky podle výpisu"/);
     const separateReport = await get("/api/tax-report?year=2025", other);
     assert.equal(separateReport.status, 200);
-    assert.ok(!(await separateReport.text()).includes(id));
+    const separateCsv = await separateReport.text();
+    assert.ok(!separateCsv.includes(id) && !separateCsv.includes("2028-01-15"));
     const demoReport = await get("/api/tax-report?year=2025");
     const demoCsv = await demoReport.text();
     assert.equal(demoReport.status, 200);
